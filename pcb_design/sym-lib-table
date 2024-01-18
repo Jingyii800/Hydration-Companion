@@ -1,0 +1,5 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "DEMO")(type "KiCad")(uri "E:/OneDrive - UW/2024winter/514 SWHWLab/Hydration Companion/PCB_resources/514_KiCAD_DEMO.kicad_sym")(options "")(descr ""))
+  (lib (name "Helkit")(type "Legacy")(uri "E:/OneDrive - UW/2024winter/514 SWHWLab/Hydration Companion/PCB_resources/heltec_htit-wb32.lib")(options "")(descr ""))
+)
