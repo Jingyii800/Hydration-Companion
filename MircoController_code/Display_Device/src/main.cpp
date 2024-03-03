@@ -29,44 +29,12 @@ BLEUUID findCupCharUUID(find_cup_char_uuid_str);
 BLEClient* pClient = nullptr;
 BLERemoteCharacteristic* pRemoteWeightCharacteristic = nullptr;
 BLERemoteCharacteristic* pRemoteFindCupCharacteristic = nullptr;
+
 bool connected = false;
 
-void connectToSensorDevice() {
-  Serial.println("Starting BLE scan...");
-  BLEScan* pBLEScan = BLEDevice::getScan();
-  pBLEScan->setActiveScan(true);
-  pBLEScan->start(5);
-}
-
-void setup() {
-  Serial.begin(115200);
-  Wire.begin();
-  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { 
-    Serial.println(F("SSD1306 allocation failed"));
-    for(;;);
-  }
-  display.display();
-  delay(2000); // Pause for 2 seconds
-
-  stepper.setMaxSpeed(1000);
-  stepper.setAcceleration(500);
-
-   BLEDevice::init("Display Device");
-  BLEServer *pServer = BLEDevice::createServer();
-  BLEService *pService = pServer->createService(serviceUUID);
-
-  // Create characteristics
-  BLECharacteristic *pWeightCharacteristic = pService->createCharacteristic(weightCharUUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
-  BLECharacteristic *pFindCupCharacteristic = pService->createCharacteristic(findCupCharUUID, BLECharacteristic::PROPERTY_WRITE);
-  connectToSensorDevice();
-}
-
-void loop() {
-  if (!connected) {
-    connectToSensorDevice(); // Attempt to reconnect
-  }
-  delay(1000); // Delay to reduce power consumption
-}
+//Handling button press to find cup
+const int buttonPin = 15; // Example pin for button
+bool findCupRequested = false;
 
 void updateDisplay(float weight) {
     display.clearDisplay();
@@ -119,6 +87,66 @@ class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
         }
     }
 };
+
+void connectToSensorDevice() {
+  Serial.println("Starting BLE scan...");
+  BLEScan* pBLEScan = BLEDevice::getScan();
+  pBLEScan->setActiveScan(true);
+  pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks()); // Set the callback here
+  pBLEScan->start(5);
+}
+
+void setup() {
+  Serial.begin(115200);
+  Wire.begin();
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { 
+    Serial.println(F("SSD1306 allocation failed"));
+    for(;;);
+  }
+  display.display();
+  delay(2000); // Pause for 2 seconds
+
+  stepper.setMaxSpeed(1000);
+  stepper.setAcceleration(500);
+
+  BLEDevice::init("Display Device");
+  BLEServer *pServer = BLEDevice::createServer();
+  BLEService *pService = pServer->createService(serviceUUID);
+
+  // Create characteristics
+  BLECharacteristic *pWeightCharacteristic = pService->createCharacteristic(weightCharUUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
+  BLECharacteristic *pFindCupCharacteristic = pService->createCharacteristic(findCupCharUUID, BLECharacteristic::PROPERTY_WRITE);
+  connectToSensorDevice();
+}
+
+void loop() {
+  // Check for button press and request to find cup
+  if (digitalRead(buttonPin) == LOW) {
+    requestFindCup();
+    delay(100); // Debounce delay
+  }
+
+  if (!connected) {
+    connectToSensorDevice(); // Attempt to reconnect
+  }
+
+  // Implement deep sleep for power saving
+  goToDeepSleep();
+}
+
+void goToDeepSleep() {
+  // Go to deep sleep for 10 minutes to save power
+  esp_sleep_enable_timer_wakeup(600 * 1000000); // 10 minutes in microseconds
+  esp_deep_sleep_start();
+}
+
+void requestFindCup() {
+  // Send signal to sensor device to find the cup
+  if (pRemoteFindCupCharacteristic != nullptr && connected) {
+    pRemoteFindCupCharacteristic->writeValue("find");
+    findCupRequested = true;
+  }
+}
 
 
 

@@ -25,77 +25,66 @@ BLECharacteristic *pFindCupCharacteristic = nullptr;
 float lastWeight = 0; // Store the last weight to detect changes
 
 class FindCupCallback: public BLECharacteristicCallbacks {
-  void onWrite(BLECharacteristic *pCharacteristic) override {
-    std::string value = pCharacteristic->getValue();
+    void onWrite(BLECharacteristic *pCharacteristic) override {
+        std::string value = pCharacteristic->getValue();
 
-    if (value == "find") { // Check if the command is to find the cup
-      digitalWrite(BUZZER_PIN, HIGH); // Turn on the buzzer
-      delay(1000); // Buzz for 1 second
-      digitalWrite(BUZZER_PIN, LOW); // Turn off the buzzer
+        if (value == "find") { // Check if the command is to find the cup
+            digitalWrite(BUZZER_PIN, HIGH); // Turn on the buzzer
+            delay(1000); // Buzz for 1 second
+            digitalWrite(BUZZER_PIN, LOW); // Turn off the buzzer
+        }
     }
-  }
 };
 
 void setup() {
-  Serial.begin(115200);
-  pinMode(BUZZER_PIN, OUTPUT);
-  digitalWrite(BUZZER_PIN, LOW); // Ensure buzzer is off initially
+    Serial.begin(115200);
+    pinMode(BUZZER_PIN, OUTPUT);
+    digitalWrite(BUZZER_PIN, LOW); // Ensure buzzer is off initially
 
-  scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
-  scale.set_scale(2280.f); // Adjust to your scale
-  scale.tare(); // Reset the scale to 0
+    scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
+    scale.set_scale(2280.f); // Adjust to your scale
+    scale.tare(); // Reset the scale to 0
 
-  BLEDevice::init("Weight Sensor");
-  pServer = BLEDevice::createServer();
+    BLEDevice::init("Weight Sensor");
+    pServer = BLEDevice::createServer();
 
-  BLEService *pService = pServer->createService(SERVICE_UUID);
+    BLEService *pService = pServer->createService(SERVICE_UUID);
 
-  pWeightCharacteristic = pService->createCharacteristic(
-                            WEIGHT_CHARACTERISTIC_UUID,
-                            BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
-                          );
-  pWeightCharacteristic->addDescriptor(new BLE2902());
+    pWeightCharacteristic = pService->createCharacteristic(
+                              WEIGHT_CHARACTERISTIC_UUID,
+                              BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
+                            );
+    pWeightCharacteristic->addDescriptor(new BLE2902());
 
-  pFindCupCharacteristic = pService->createCharacteristic(
-                             FIND_CUP_CHARACTERISTIC_UUID,
-                             BLECharacteristic::PROPERTY_WRITE
-                           );
-  pFindCupCharacteristic->setCallbacks(new FindCupCallback());
+    pFindCupCharacteristic = pService->createCharacteristic(
+                               FIND_CUP_CHARACTERISTIC_UUID,
+                               BLECharacteristic::PROPERTY_WRITE
+                             );
+    pFindCupCharacteristic->setCallbacks(new FindCupCallback());
 
-  pService->start();
-  BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-  pAdvertising->addServiceUUID(SERVICE_UUID);
-  pAdvertising->setScanResponse(true);
-  BLEDevice::startAdvertising();
-  Serial.println("Waiting for a client connection to notify...");
+    pService->start();
+    BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+    pAdvertising->addServiceUUID(SERVICE_UUID);
+    pAdvertising->setScanResponse(true);
+    BLEDevice::startAdvertising();
+    Serial.println("Waiting for a client connection to notify...");
 }
 
 void loop() {
-  static float previousWeight = 0; // Store the previous weight for comparison
-  float weight = scale.get_units(5); // Take a 5 reading average to smooth the data
+    float weight = scale.get_units(5); // Take a 5 reading average to smooth the data
+    float weightChange = lastWeight - weight; // Calculate the change in weight
 
-  if (previousWeight == 0) {
-    previousWeight = weight; // Initialize with the first reading
-  }
-
-  // Check if the weight has decreased
-  if (weight < previousWeight) {
-    float weightChange = previousWeight - weight; // Calculate the decrease
-
-    // Only send the data if the change is significant to avoid noise
-    if (weightChange >= 0.05) {
-      Serial.print("Water intake detected: ");
-      Serial.println(weightChange, 2);
-      char tempBuff[20];
-      dtostrf(weightChange, 1, 2, tempBuff); // Convert float to char array
-      pWeightCharacteristic->setValue(tempBuff); // Set the weight value
-      pWeightCharacteristic->notify(); // Notify any connected clients
+    if (abs(weightChange) >= 50) { // Only send data if the change is 50g or more
+        Serial.print("Significant weight change detected: ");
+        Serial.println(weightChange, 2);
+        char tempBuff[20];
+        dtostrf(weightChange, 1, 2, tempBuff); // Convert float to char array
+        pWeightCharacteristic->setValue(tempBuff); // Set the weight value
+        pWeightCharacteristic->notify(); // Notify any connected clients
+        lastWeight = weight; // Update last weight
     }
-  }
 
-  previousWeight = weight; // Update the last weight for the next loop iteration
-  delay(1000); // Delay between readings                 
+    delay(1000); // Delay between readings
 }
-
 
 
